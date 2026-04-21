@@ -128,9 +128,20 @@ VARS = ['TOTAL_VENTAS', 'NUM_COMPRAS', 'NUM_CONSULTAS', 'EMPRESASUNICAS_CONSULT'
 # ─── Funciones de carga y procesamiento ───────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def cargar_datos(clientes_bytes, ventas_bytes, consultas_bytes):
-    clientes  = pd.read_csv(clientes_bytes,  sep="|", encoding="latin1")
-    ventas    = pd.read_csv(ventas_bytes,    sep="|", encoding="latin1")
-    consultas = pd.read_csv(consultas_bytes, sep="|", encoding="latin1")
+    import zipfile, io
+
+    clientes = pd.read_csv(clientes_bytes, sep="|", encoding="latin1")
+    ventas   = pd.read_csv(ventas_bytes,   sep="|", encoding="latin1")
+
+    # Soporta tanto .zip como .txt directamente
+    nombre = getattr(consultas_bytes, "name", "")
+    if nombre.endswith(".zip"):
+        with zipfile.ZipFile(io.BytesIO(consultas_bytes.read())) as z:
+            txt_file = [f for f in z.namelist() if f.endswith(".txt") or f.endswith(".csv")][0]
+            with z.open(txt_file) as f:
+                consultas = pd.read_csv(f, sep="|", encoding="latin1")
+    else:
+        consultas = pd.read_csv(consultas_bytes, sep="|", encoding="latin1")
 
     ventas_agg = ventas.groupby("ID").agg(
         TOTAL_VENTAS   = ("IMPORTE", "sum"),
@@ -231,7 +242,7 @@ with st.sidebar:
 
     f_clientes  = st.file_uploader("CLIENTES.txt",  type=["txt", "csv"])
     f_ventas    = st.file_uploader("VENTAS.txt",    type=["txt", "csv"])
-    f_consultas = st.file_uploader("CONSULTAS.txt", type=["txt", "csv"])
+    f_consultas = st.file_uploader("CONSULTAS.txt / .zip", type=["txt", "csv", "zip"])
 
     st.markdown("---")
     st.markdown("### ⚙️ Opciones")
